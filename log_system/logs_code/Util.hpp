@@ -145,6 +145,11 @@ namespace mylog
             }
         };
         struct JsonData{
+            enum LogFileMode
+            {
+                TIME_ROLL = 1, // 按照时间滚动
+                SIZE_ROLL = 2, // 按照大小滚动
+            };
             static JsonData* GetJsonData(){
                static JsonData* json_data = new JsonData;
                return json_data;
@@ -166,6 +171,10 @@ namespace mylog
                 backup_addr = root["backup_addr"].asString();
                 backup_port = root["backup_port"].asInt();
                 thread_count = root["thread_count"].asInt();
+                retention_days = root["retention_days"].asInt();
+                log_file_mode = root["log_file_mode"].asInt();
+                rolling_interval = root["rolling_interval"].asInt();
+                write_thread_count = root["write_thread_count"].asInt();
             }
             public:
                 size_t buffer_size;//缓冲区基础容量
@@ -175,6 +184,10 @@ namespace mylog
                 std::string backup_addr;
                 uint16_t backup_port;
                 size_t thread_count;
+                size_t retention_days; // 日志保留天数
+                size_t log_file_mode; // 日志文件模式，1为按照时间滚动，2为按照大小滚动
+                size_t rolling_interval; // 滚动间隔，单位为秒
+                size_t write_thread_count;
         };
     } // namespace Util
 } // namespace mylog

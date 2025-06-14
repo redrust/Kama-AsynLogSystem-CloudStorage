@@ -2,6 +2,7 @@
 #include <fstream>
 #include <memory>
 #include <unistd.h>
+#include <filesystem>
 #include "Util.hpp"
 
 extern mylog::Util::JsonData* g_conf_data;
@@ -66,7 +67,8 @@ namespace mylog{
         RollFileFlush(const std::string &filename, size_t max_size)
             : max_size_(max_size), basename_(filename)
         {
-            Util::File::CreateDirectory(Util::File::Path(filename));
+            log_file_path_ = Util::File::Path(filename);
+            Util::File::CreateDirectory(log_file_path_);
         }
 
         void Flush(const char *data, size_t len) override
@@ -89,24 +91,60 @@ namespace mylog{
                 fflush(fs_);
                 fsync(fileno(fs_));
             }
+
+            CheckLogFile();
         }
 
     private:
         void InitLogFile()
         {
-            if (fs_==NULL || cur_size_ >= max_size_)
+            if(g_conf_data->log_file_mode == Util::JsonData::LogFileMode::SIZE_ROLL)
             {
-                if(fs_!=NULL){
-                    fclose(fs_);
-                    fs_=NULL;
-                }   
-                std::string filename = CreateFilename();
-                fs_=fopen(filename.c_str(), "ab");
-                if(fs_==NULL){
-                    std::cout <<__FILE__<<__LINE__<<"open file failed"<< std::endl;
-                    perror(NULL);
+                if (fs_==NULL || cur_size_ >= max_size_)
+                {
+                    reopenFile();
+                    cur_size_ = 0;
                 }
-                cur_size_ = 0;
+            }
+            else if (g_conf_data->log_file_mode == Util::JsonData::LogFileMode::TIME_ROLL)
+            {
+                time_t now = Util::Date::Now();
+                if (fs_ == NULL || now - last_roll_file_ts_ >= g_conf_data->rolling_interval)
+                {
+                    reopenFile();
+                    last_roll_file_ts_ = now;
+                }
+            }
+        }
+
+        void CheckLogFile()
+        {
+            std::filesystem::file_time_type ft = std::filesystem::file_time_type::clock::now();
+            uint64_t now = GetFileLastWriteTimeSec(ft);
+            size_t rentention_sec = g_conf_data->retention_days * 24 * 3600;
+            if (now - last_check_log_file_ts_ < rentention_sec){
+                return;
+            }
+            last_check_log_file_ts_ = now;
+            auto files = GetFilesInDirectory();
+            if(files.size() <= 1 )
+            {
+                return;
+            }
+            std::sort(files.begin(), files.end(),
+                      [](const std::filesystem::directory_entry &a,
+                         const std::filesystem::directory_entry &b) {
+                          return a.last_write_time() < b.last_write_time();
+                      });
+            // 遍历所有日志文件
+            for(auto it = files.begin(); it != files.end(); ++it)
+            {
+                // 删除超过保留天数的日志文件
+                auto last_write_sec = std::chrono::duration_cast<std::chrono::seconds>(ft - it->last_write_time()).count();
+                if (last_write_sec > rentention_sec)
+                {
+                    std::filesystem::remove(it->path());
+                }
             }
         }
 
@@ -128,12 +166,49 @@ namespace mylog{
         }
 
     private:
+
+        std::vector<std::filesystem::directory_entry> GetFilesInDirectory()
+        {
+            std::vector<std::filesystem::directory_entry> files;
+            for (const auto &entry : std::filesystem::directory_iterator(log_file_path_))
+            {
+                if (entry.is_regular_file())
+                {
+                    files.push_back(entry);
+                }
+            }
+            return files;
+        }
+
+        uint64_t GetFileLastWriteTimeSec(const std::filesystem::file_time_type &ft)
+        {
+            auto fs_now = std::filesystem::file_time_type::clock::now();
+            return std::chrono::duration_cast<std::chrono::seconds>(ft.time_since_epoch()).count();
+        }
+
+        void reopenFile()
+        {
+            if(fs_!=NULL){
+                fclose(fs_);
+                fs_=NULL;
+            }   
+            std::string filename = CreateFilename();
+            fs_=fopen(filename.c_str(), "ab");
+            if(fs_==NULL){
+                std::cout <<__FILE__<<__LINE__<<"open file failed"<< std::endl;
+                perror(NULL);
+            }
+        }
+
         size_t cnt_ = 1;
         size_t cur_size_ = 0;
         size_t max_size_;
         std::string basename_;
         // std::ofstream ofs_;
         FILE* fs_ = NULL;
+        time_t last_check_log_file_ts_ = 0;
+        std::string log_file_path_;
+        time_t last_roll_file_ts_ = 0; // 上次滚动日志的时间戳
     };
 
     class LogFlushFactory
