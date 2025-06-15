@@ -1,5 +1,5 @@
-test:Test.cpp base64.cpp
-	g++ -o $@ $^ -std=c++17 -lpthread -lstdc++fs -ljsoncpp -lbundle -levent 
+test:Test.cpp base64.cpp DataManager.hpp Service.hpp
+	g++ -g -o $@ $^ -std=c++17 -lpthread -lstdc++fs -ljsoncpp -lbundle -levent 
 gdb_test:Test.cpp
 	g++ -g -o $@ $^ -std=c++17 -lpthread -lstdc++fs -ljsoncpp  -lbundle -levent
 .PHONY:clean

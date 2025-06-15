@@ -240,6 +240,18 @@ namespace storage
             }
             return true;
         }
+
+        bool Remove()
+        {
+            if (Exists() == false)
+            {
+                mylog::GetLogger("asynclogger")->Info("%s not exists", filename_.c_str());
+                return false;
+            }
+            fs::remove(filename_);
+            mylog::GetLogger("asynclogger")->Info("%s remove success", filename_.c_str());
+            return true;
+        }
     };
 
     class JsonUtil

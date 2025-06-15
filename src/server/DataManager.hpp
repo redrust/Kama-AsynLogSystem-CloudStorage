@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _DATA_MANAGER_HPP_
+#define _DATA_MANAGER_HPP_
 #include "Config.hpp"
 #include <unordered_map>
 #include <pthread.h>
@@ -28,11 +29,27 @@ namespace storage
             storage_path_ = storage_path;
             // URL实际就是用户下载文件请求的路径
             // 下载路径前缀+文件名
-            storage::Config *config = storage::Config::GetInstance();
-            url_ = config->GetDownloadPrefix() + f.FileName();
+            url_ = BuildURL(f.FileName());
             mylog::GetLogger("asynclogger")->Info("download_url:%s,mtime_:%s,atime_:%s,fsize_:%d", url_.c_str(),ctime(&mtime_),ctime(&atime_),fsize_);
             mylog::GetLogger("asynclogger")->Info("NewStorageInfo end");
             return true;
+        }
+
+        std::string GetFileName() const
+        {
+            return url_.substr(url_.find_last_of('/') + 1);
+        }
+
+        std::string GetRemovePath() const
+        {
+            storage::Config *config = storage::Config::GetInstance();
+            return config->GetRemovePrefix() + GetFileName();
+        }
+
+        static std::string BuildURL(const std::string& file_name)
+        {
+            storage::Config *config = storage::Config::GetInstance();
+            return config->GetDownloadPrefix() + file_name;
         }
     } StorageInfo; // namespace StorageInfo
 
@@ -194,5 +211,16 @@ namespace storage
             pthread_rwlock_unlock(&rwlock_);
             return true;
         }
+        void Remove(const std::string &key)
+        {
+            pthread_rwlock_wrlock(&rwlock_);
+            if (table_.find(key) != table_.end())
+            {
+                table_.erase(key);
+                mylog::GetLogger("asynclogger")->Info("data_message Remove: %s", key.c_str());
+            }
+            pthread_rwlock_unlock(&rwlock_);
+        }
     }; // namespace DataManager
 }
+#endif // _DATA_MANAGER_HPP_

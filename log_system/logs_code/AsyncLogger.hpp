@@ -128,16 +128,16 @@ namespace mylog
             if (level == LogLevel::value::FATAL ||
                 level == LogLevel::value::ERROR)
             {
-                try
-                {
-                    auto ret = tp->enqueue(start_backup, data);
-                    ret.get();
-                }
-                catch (const std::runtime_error &e)
-                {
-                    // 该线程池没有把stop设置为true的逻辑，所以不做处理
-                    std::cout << __FILE__ << __LINE__ << "thread pool closed" << std::endl;
-                }
+                // try
+                // {
+                //     auto ret = tp->enqueue(start_backup, data);
+                //     ret.get();
+                // }
+                // catch (const std::runtime_error &e)
+                // {
+                //     // 该线程池没有把stop设置为true的逻辑，所以不做处理
+                //     std::cout << __FILE__ << __LINE__ << "thread pool closed" << std::endl;
+                // }
             }
              //获取到string类型的日志信息后就可以输出到异步缓冲区了，异步工作器后续会对其进行刷盘
             Flush(data.c_str(), data.size());

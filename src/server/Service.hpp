@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SRC_SERVER_SERVICE_HPP_
+#define SRC_SERVER_SERVICE_HPP_
 #include "DataManager.hpp"
 
 #include <sys/queue.h>
@@ -97,6 +98,10 @@ namespace storage
             else if (path == "/upload")
             {
                 Upload(req, arg);
+            }
+            else if (path.find("/remove/") != std::string::npos)
+            {
+                Remove(req, arg);
             }
             // 这里就是显示已存储文件列表，返回一个html页面给浏览器
             else if (path == "/")
@@ -243,7 +248,8 @@ namespace storage
                    << "<span>" << formatSize(file.fsize_) << "</span>"
                    << "<span>" << TimetoStr(file.mtime_) << "</span>"
                    << "</div>"
-                   << "<button onclick=\"window.location='" << file.url_ << "'\">⬇️ 下载</button>"
+                   << "<div class='flex-container'><button onclick=\"window.location='" << file.url_ << "'\">⬇️ 下载</button>"
+                   << "<button onclick=\"window.location='" << file.GetRemovePath() << "'\">删除 </button></div>"
                    << "</div>";
             }
 
@@ -402,5 +408,32 @@ namespace storage
                 remove(download_path.c_str()); // 删除文件
             }
         }
+        
+        static void Remove(struct evhttp_request *req, void *arg)
+        {
+            StorageInfo info;
+            std::string resource_path = evhttp_uri_get_path(evhttp_request_get_evhttp_uri(req));
+            resource_path = UrlDecode(resource_path);
+            mylog::GetLogger("asynclogger")->Error("request resource_path:%s", resource_path.c_str());
+            std::string filename = resource_path.substr(resource_path.find_last_of('/') + 1);
+            std::string url = StorageInfo::BuildURL(filename);
+            if (data_->GetOneByURL(url, &info) == false)
+            {
+                mylog::GetLogger("asynclogger")->Error("file not found: %s", url.c_str());
+                evhttp_send_reply(req, HTTP_NOTFOUND, "File Not Found", NULL);
+                return;
+            }
+            FileUtil fu(info.storage_path_);
+            if (fu.Remove() == false)
+            {
+                mylog::GetLogger("asynclogger")->Error("remove file error: %s", info.storage_path_.c_str());
+                evhttp_send_reply(req, HTTP_INTERNAL, "Remove File Error", NULL);
+                return;
+            }
+            data_->Remove(info.url_); // 从数据管理模块中删除存储信息
+            evhttp_add_header(req->output_headers, "Location", "/");
+            evhttp_send_reply(req, 302, "Found", NULL);
+        }
     };
 }
+#endif // SRC_SERVER_SERVICE_HPP_

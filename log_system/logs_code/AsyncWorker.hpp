@@ -5,6 +5,7 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <unistd.h>
 
 #include "AsyncBuffer.hpp"
 
@@ -87,6 +88,10 @@ private:
             while (true)
             {
                 old_head = head_.load(std::memory_order_relaxed);
+                if(old_head == nullptr) {
+                    usleep(100);  // 如果头节点为空，稍微等待一下
+                    continue;  // 继续尝试获取头节点
+                }
                 Node* next = old_head->next.load(std::memory_order_acquire);
                 Node* old_tail = tail_.load(std::memory_order_relaxed);
                 if(old_head == head_.load(std::memory_order_relaxed))// 确保 head 未被其他线程修改
